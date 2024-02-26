@@ -21,6 +21,7 @@ rc = racecar_core.create_racecar()
 WINDOW_SIZE = 8 # Window size to calculate the average distance
 CURVE_ANGLE_SIZE = 40 # The angle of a gap to check existence of curve
 CURVE_DISTANCE_SIZE = 30 # The distance of a gap to check existence of curve
+FAR_DISTANCE_SIZE = 100 # If the closest point is over this value, it would be ignored
 
 # >> Variables
 speed = 0.0  # The current speed of the car
@@ -182,36 +183,41 @@ def update():
 
     update_lidar()
 
-    angle_error = 0
-    left_gap = average_scan[270 + CURVE_ANGLE_SIZE] - average_scan[270]
-    right_gap = average_scan[90 - CURVE_ANGLE_SIZE] - average_scan[90]
+    # If there are no obstacles on either side, just run straight.
+    if (closest_left_distance > FAR_DISTANCE_SIZE or closest_left_distance == 0) and \
+        (closest_right_distance > FAR_DISTANCE_SIZE or closest_right_distance == 0):
+            angle = 0
+    else:
+        angle_error = 0
+        left_gap = average_scan[270 + CURVE_ANGLE_SIZE] - average_scan[270]
+        right_gap = average_scan[90 - CURVE_ANGLE_SIZE] - average_scan[90]
 
-    if left_gap > CURVE_DISTANCE_SIZE and left_gap > right_gap: # Left Curve
-        angle_error = -CURVE_DISTANCE_SIZE
-    elif right_gap > CURVE_DISTANCE_SIZE: # Right Curve
-        angle_error = CURVE_DISTANCE_SIZE
-    else: # Try to maintain the center
-        center = (closest_left_distance + closest_right_distance) / 2
-        angle_error = (center - closest_left_distance) * 2
+        if left_gap > CURVE_DISTANCE_SIZE and left_gap > right_gap: # Left Curve
+            angle_error = -CURVE_DISTANCE_SIZE
+        elif right_gap > CURVE_DISTANCE_SIZE: # Right Curve
+            angle_error = CURVE_DISTANCE_SIZE
+        else: # Try to maintain the center
+            center = (closest_left_distance + closest_right_distance) / 2
+            angle_error = (center - closest_left_distance) * 2
 
-        # If an obstacle is expected to be in front of one side, move to a higher angle.
-        if angle_error > 0:
-            angle_error = (1 + (closest_left_angle - 270) / 30) * angle_error
-        else:
-            angle_error = (1 + (90 - closest_right_angle) / 30) * angle_error
+            # If an obstacle is expected to be in front of one side, move to a higher angle.
+            if angle_error > 0:
+                angle_error = (1 + (closest_left_angle - 270) / 30) * angle_error
+            else:
+                angle_error = (1 + (90 - closest_right_angle) / 30) * angle_error
 
-    # Update angle integral term
-    integral_angle += angle_error
+        # Update angle integral term
+        integral_angle += angle_error
 
-    # Update angle derivative term
-    angle_derivative = angle_error - prev_error_angle
-    prev_error_angle = angle_error
+        # Update angle derivative term
+        angle_derivative = angle_error - prev_error_angle
+        prev_error_angle = angle_error
 
-    # Calculate angle PID output
-    angle_pid_output = KP * angle_error + KI * integral_angle + KD * angle_derivative
+        # Calculate angle PID output
+        angle_pid_output = KP * angle_error + KI * integral_angle + KD * angle_derivative
 
-    # Convert angle PID output to angle
-    angle = angle_pid_output
+        # Convert angle PID output to angle
+        angle = angle_pid_output
 
     # PID control for speed
     # Calculate speed error (difference between desired and actual speed)
